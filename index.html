@@ -46,7 +46,7 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
 <div id="app">
 <nav id="nav"><button data-t="att" class="on">Attendance</button><button data-t="enr">Enroll student</button><button data-t="rep">Reports</button><button data-t="stu">Students</button></nav>
 <main>
-<p class="msg" id="status">Loading face models… (internet needed the first time)</p>
+<p class="msg" id="status">Starting…</p>
 
 <section id="att" class="on">
  <div class="card"><div class="cols">
@@ -82,17 +82,16 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
  <div class="row"><button class="btn alt" id="bExp">Backup data</button><button class="btn alt" id="bImp">Restore backup</button><input type="file" id="bFile" accept=".json" hidden></div>
  <p class="msg">Names, classes and attendance sync online when you are signed in. Face data stays on the phone where the student was enrolled.</p></div></section>
 </main></div>
-<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 // ---- cloud setup: paste your Firebase config here (leave empty to use this device only)
 const CFG={apiKey:"",authDomain:"",projectId:"",appId:""};
-const cloud=!!CFG.apiKey&&typeof firebase!=='undefined';
+const cloud=!!CFG.apiKey;
 let auth,fs,uid=null,unsubs=[];
-if(cloud){firebase.initializeApp(CFG);auth=firebase.auth();fs=firebase.firestore()}
+const loadJS=u=>new Promise((ok,no)=>{const e=document.createElement('script');e.src=u;e.onload=ok;e.onerror=()=>no(new Error('could not load '+u));document.head.appendChild(e)});
+async function loadFB(){const b='https://www.gstatic.com/firebasejs/10.12.2/firebase-';
+ for(const n of['app','auth','firestore'])await loadJS(b+n+'-compat.js');
+ firebase.initializeApp(CFG);auth=firebase.auth();fs=firebase.firestore()}
 const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
 let db=ld('fa2',null)||{students:[],att:{}},faces=ld('fa2f',{});
 const prev=ld('fa',null);
@@ -118,12 +117,16 @@ $('#nav').onclick=e=>{const t=e.target.dataset.t;if(!t)return;
  if(t!=='att')stop('aVid');if(t!=='enr')stop('eVid');
  if(t==='stu')renderStu();};
 
-// models
-(async()=>{try{
- const U='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
- await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(U),faceapi.nets.faceLandmark68TinyNet.loadFromUri(U),faceapi.nets.faceRecognitionNet.loadFromUri(U)]);
- ready=true;$('#status').textContent='Ready.';
-}catch(e){$('#status').textContent='Face models could not load. Check your internet connection and reload.'}})();
+// models (loaded after the page is shown; tries a second server if the first fails)
+(async()=>{const B=['https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/','https://unpkg.com/@vladmandic/face-api@1.7.12/'];
+ for(const b of B){try{
+  $('#status').textContent='Loading face engine…';
+  if(typeof faceapi==='undefined')await loadJS(b+'dist/face-api.js');
+  $('#status').textContent='Loading face models… (about 6 MB, first time only)';
+  const U=b+'model/';
+  await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(U),faceapi.nets.faceLandmark68TinyNet.loadFromUri(U),faceapi.nets.faceRecognitionNet.loadFromUri(U)]);
+  ready=true;$('#status').textContent='Ready.';return}catch(e){}}
+ $('#status').textContent='Face models could not load. Check your internet and reload the page. You can still mark attendance by hand.'})();
 
 async function cam(id){
  try{stop(id);const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
@@ -158,4 +161,96 @@ $('#eSave').onclick=()=>{
 const day=()=>$('#aDate').value;
 const rec=()=>db.att[day()]=db.att[day()]||{};
 const list=()=>db.students.filter(s=>!$('#aCls').value||s.cls===$('#aCls').value);
-function buildMatcher(){const L=list().filter(s=>faces[s.id]).map(s=>new faceapi.LabeledFaceDescriptors(s.id,faces[s.id].map(a=>new
+function buildMatcher(){const L=list().filter(s=>faces[s.id]).map(s=>new faceapi.LabeledFaceDescriptors(s.id,faces[s.id].map(a=>new Float32Array(a))));
+ matcher=L.length?new faceapi.FaceMatcher(L,.5):null}
+function renderAtt(){const r=db.att[day()]||{};const L=list();let p=0;
+ $('#aBody').innerHTML=L.map(s=>{const on=r[s.id]==='Present';if(on)p++;
+  return `<tr><td>${esc(s.name)}</td><td>${esc(s.cls)}</td><td><button class="${on?'P':'A'}" data-id="${s.id}">${on?'Present':'Absent'}</button></td></tr>`}).join('')
+  ||'<tr><td colspan="3">No students yet. Enroll students first.</td></tr>';
+ $('#cP').textContent='Present: '+p;$('#cA').textContent='Absent: '+(L.length-p)}
+$('#aBody').onclick=e=>{const id=e.target.dataset.id;if(!id)return;const r=rec();r[id]=r[id]==='Present'?'Absent':'Present';persist();cAtt(day(),{[id]:r[id]});renderAtt()};
+$('#aCls').onchange=()=>{buildMatcher();renderAtt()};$('#aDate').onchange=renderAtt;
+$('#aSave').onclick=()=>{const r=rec();const o={};list().forEach(s=>{if(!r[s.id])r[s.id]=o[s.id]='Absent'});persist();cAtt(day(),o);renderAtt();$('#aMsg').textContent='Attendance saved for '+day()+'.'};
+$('#aStop').onclick=()=>{stop('aVid');$('#aMsg').textContent='Camera stopped.'};
+$('#aStart').onclick=async()=>{
+ if(!ready)return alert('Face models are still loading.');
+ if(!list().some(s=>faces[s.id]))return alert('No enrolled faces on this device for this class. Enroll students here, or mark attendance by hand.');
+ if(!await cam('aVid'))return;buildMatcher();$('#aMsg').textContent='Looking for faces…';
+ let busy=false;timer=setInterval(async()=>{if(busy||!matcher)return;busy=true;
+  try{const f=await faceapi.detectAllFaces($('#aVid'),OPT()).withFaceLandmarks(true).withFaceDescriptors();
+   const r=rec();let names=[];
+   f.forEach(x=>{const m=matcher.findBestMatch(x.descriptor);
+    if(m.label!=='unknown'){const s=db.students.find(t=>t.id===m.label);names.push(s.name);
+     const fresh=r[m.label]!=='Present';
+     if(fresh){r[m.label]='Present';persist();cAtt(day(),{[m.label]:'Present'});renderAtt()}
+     greet(s,fresh)}});
+   $('#aMsg').textContent=f.length?(names.length?'Seen: '+names.join(', '):'Face not recognised.'):'Looking for faces…';
+  }catch(e){}busy=false},800)};
+
+// thank-you greeting
+let seen={},hideT=null;
+function greet(s,fresh){const now=Date.now();if(seen[s.id]&&now-seen[s.id]<5000)return;seen[s.id]=now;
+ const t=$('#thanks');t.className='thanks show'+(fresh?'':' dup');
+ t.innerHTML=fresh?`<b>Thank you, ${esc(s.name)}!</b><span>Class ${esc(s.cls)} · Attendance marked Present</span>`
+  :`<b>${esc(s.name)}</b><span>Class ${esc(s.cls)} · Already marked Present today</span>`;
+ clearTimeout(hideT);hideT=setTimeout(()=>t.className='thanks',3500);
+ if(fresh&&$('#aVoice').checked&&window.speechSynthesis){try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('Thank you '+s.name))}catch(e){}}}
+
+// students
+function renderStu(){$('#sBody').innerHTML=db.students.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.cls)}</td><td>${esc(s.adr||'')}</td><td>${faces[s.id]?'Yes':'No'}</td><td><button class="btn red" data-del="${s.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="5">No students enrolled yet.</td></tr>'}
+$('#sBody').onclick=e=>{const id=e.target.dataset.del;if(!id)return;const s=db.students.find(x=>x.id===id);
+ if(!confirm('Delete '+s.name+' and their face data?'))return;
+ db.students=db.students.filter(x=>x.id!==id);delete faces[id];Object.values(db.att).forEach(r=>delete r[id]);persist();cDel(id);renderStu();fillClasses();renderAtt()};
+$('#bExp').onclick=()=>dl('attendance-backup-'+iso(new Date())+'.json',JSON.stringify({students:db.students,att:db.att,faces}),'application/json');
+$('#bImp').onclick=()=>$('#bFile').click();
+$('#bFile').onchange=async e=>{try{const d=JSON.parse(await e.target.files[0].text());
+ if(!d.students||!d.att)throw 0;if(!confirm('Replace all data on this device with the backup?'))return;
+ db={students:d.students,att:d.att};faces=d.faces||{};persist();db.students.forEach(cStu);Object.entries(db.att).forEach(([k,o])=>cAtt(k,o));fillClasses();renderStu();renderAtt();alert('Backup restored.')}catch(x){alert('This is not a valid backup file.')}};
+function dl(n,t,m){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:m}));a.download=n;a.click()}
+
+// reports
+let rows=[],rHeader=[];
+function range(p,d){const D=new Date(d+'T00:00:00');let a=new Date(D),b=new Date(D);
+ if(p==='w'){const k=(D.getDay()+6)%7;a.setDate(D.getDate()-k);b=new Date(a);b.setDate(a.getDate()+6)}
+ if(p==='m'){a=new Date(D.getFullYear(),D.getMonth(),1);b=new Date(D.getFullYear(),D.getMonth()+1,0)}
+ if(p==='y'){a=new Date(D.getFullYear(),0,1);b=new Date(D.getFullYear(),11,31)}
+ return[iso(a),iso(b)]}
+$('#rGo').onclick=()=>{const p=$('#rPer').value,d=$('#rDate').value;if(!d)return alert('Pick a date.');
+ const[a,b]=range(p,d),c=$('#rCls').value,L=db.students.filter(s=>!c||s.cls===c);
+ const days=Object.keys(db.att).filter(k=>k>=a&&k<=b).sort();
+ if(p==='d'){rHeader=['Student name','Class','Status'];
+  rows=L.map(s=>[s.name,s.cls,(db.att[d]&&db.att[d][s.id])==='Present'?'Present':'Absent'])}
+ else{rHeader=['Student name','Class','Days present','Days absent','Total days','Attendance %'];
+  rows=L.map(s=>{const pr=days.filter(k=>db.att[k][s.id]==='Present').length;
+   return[s.name,s.cls,pr,days.length-pr,days.length,days.length?Math.round(pr*100/days.length)+'%':'-']})}
+ $('#rMsg').textContent=(p==='d'?d:a+' to '+b)+(p==='d'?'':' ('+days.length+' days with attendance taken)');
+ $('#rHead').innerHTML='<tr>'+rHeader.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
+ $('#rBody').innerHTML=rows.map(r=>'<tr>'+r.map(x=>`<td>${esc(x)}</td>`).join('')+'</tr>').join('')||'<tr><td>No students.</td></tr>'};
+$('#rCsv').onclick=()=>{if(!rows.length)return alert('Show a report first.');
+ dl('attendance-report.csv',[rHeader,...rows].map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
+
+// ---- cloud sync and sign-in
+function offerUpload(){const m=local0.students.filter(s=>!db.students.find(x=>x.id===s.id));
+ if(!m.length)return;
+ if(!confirm('Upload '+m.length+' student(s) saved on this device to the account you just signed in with?'))return;
+ m.forEach(cStu);Object.entries(local0.att).forEach(([k,o])=>cAtt(k,o))}
+function listen(){let first=true;
+ unsubs.push(col('students').onSnapshot(q=>{db.students=q.docs.map(d=>({id:d.id,...d.data()}));persist();
+  if(first){first=false;offerUpload()}
+  fillClasses();renderAtt();renderStu();if(timer)buildMatcher();setSync('Synced')},cerr));
+ unsubs.push(col('attendance').onSnapshot(q=>{db.att={};q.docs.forEach(d=>db.att[d.id]=d.data());persist();renderAtt();setSync('Synced')},cerr))}
+const gate=on=>{$('#login').hidden=on;$('#app').hidden=!on;$('#out').hidden=!on||!cloud};
+if(cloud){gate(false);setSync('Connecting…');loadFB().then(()=>{
+ auth.onAuthStateChanged(u=>{
+  if(u){uid=u.uid;if(localStorage.getItem('fa2uid')!==uid){db={students:[],att:{}};localStorage.setItem('fa2uid',uid);persist()}
+   $('#who').textContent=u.email;gate(true);setSync('Syncing…');renderAtt();renderStu();listen()}
+  else{uid=null;unsubs.forEach(f=>f());unsubs=[];$('#who').textContent='';gate(false)}});
+ const go=m=>{const e=$('#liE').value.trim(),p=$('#liP').value;if(!e||!p)return $('#liMsg').textContent='Enter your email and password.';
+  auth[m](e,p).catch(x=>$('#liMsg').textContent=x.message)};
+ $('#liBtn').onclick=()=>go('signInWithEmailAndPassword');$('#liNew').onclick=()=>go('createUserWithEmailAndPassword');
+ $('#out').onclick=()=>{stop('aVid');stop('eVid');auth.signOut()}
+}).catch(e=>setSync('Could not reach Firebase: '+e.message))}
+else{gate(true);setSync('Saving on this device only')}
+$('#aDate').value=$('#rDate').value=iso(new Date());
+fillClasses();renderAtt();
+</script></body></html>
