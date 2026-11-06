@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Face Attendance</title>
+<style>
+:root{--bg:#f1f5f3;--ink:#17211d;--card:#fff;--g:#1f6f55;--gl:#d9efe6;--r:#b3382c;--rl:#f7dcd8;--line:#d3ddd8;--mut:#5d6b65}
+@media(prefers-color-scheme:dark){:root{--bg:#121a17;--ink:#e8efec;--card:#1b2622;--g:#4fc095;--gl:#1d3a30;--r:#ef8478;--rl:#40211e;--line:#2c3a35;--mut:#9bada5}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+header{background:var(--g);color:#fff;padding:14px 16px}header h1{margin:0;font-size:20px}
+@media(prefers-color-scheme:dark){header{color:#0d1511}}
+nav{display:flex;gap:4px;padding:8px;overflow-x:auto;background:var(--card);border-bottom:1px solid var(--line)}
+nav button{flex:1;min-width:90px;padding:10px;border:0;border-radius:8px;background:none;color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+nav button.on{background:var(--gl);color:var(--g)}
+main{max-width:900px;margin:0 auto;padding:14px}
+section{display:none}section.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+label{display:block;font-weight:600;margin:10px 0 4px}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:8px;font:inherit;background:var(--bg);color:var(--ink)}
+.btn{padding:10px 16px;border:0;border-radius:8px;background:var(--g);color:#fff;font:inherit;font-weight:600;cursor:pointer}
+@media(prefers-color-scheme:dark){.btn{color:#0d1511}}
+.btn.alt{background:var(--gl);color:var(--g)}.btn.red{background:var(--rl);color:var(--r)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}.row>*{flex:0 0 auto}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.cols{grid-template-columns:1fr}}
+video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:scaleX(-1)}
+.stage{position:relative}
+.thanks{position:absolute;left:10px;right:10px;bottom:10px;padding:14px;border-radius:12px;text-align:center;background:var(--g);color:#fff;box-shadow:0 4px 18px #0006;display:none}
+@media(prefers-color-scheme:dark){.thanks{color:#0d1511}}
+.thanks.show{display:block}.thanks.dup{background:#6b5b1f;color:#fff}
+.thanks b{display:block;font-size:22px}.thanks span{display:block;font-size:17px;margin-top:2px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.top small{opacity:.9;font-size:13px}.top button{padding:6px 12px;border:1px solid currentColor;border-radius:8px;background:none;color:inherit;font:inherit;cursor:pointer}
+#login{max-width:420px;margin:30px auto;padding:0 14px}
+.msg{color:var(--mut);font-size:14px;margin:6px 0}
+.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+.P,.A{border:0;border-radius:20px;padding:6px 14px;font:inherit;font-weight:700;cursor:pointer}
+.P{background:var(--gl);color:var(--g)}.A{background:var(--rl);color:var(--r)}
+.stats{display:flex;gap:10px;margin-bottom:10px}.stats div{flex:1;padding:10px;border-radius:8px;text-align:center;font-weight:700}
+:focus-visible{outline:3px solid var(--g);outline-offset:2px}
+</style></head><body>
+<header><div class="top"><h1>Face Attendance</h1><div><small id="sync"></small> <small id="who"></small> <button id="out" hidden>Sign out</button></div></div></header>
+<div id="login" hidden><div class="card"><h2 style="margin-top:0">Sign in</h2>
+ <label for="liE">Email</label><input id="liE" type="email" autocomplete="email">
+ <label for="liP">Password (6+ characters)</label><input id="liP" type="password" autocomplete="current-password">
+ <div class="row"><button class="btn" id="liBtn">Sign in</button><button class="btn alt" id="liNew">Create account</button></div>
+ <p class="msg" id="liMsg">First time? Tap Create account once, then use Sign in every other time.</p></div></div>
+<div id="app">
+<nav id="nav"><button data-t="att" class="on">Attendance</button><button data-t="enr">Enroll student</button><button data-t="rep">Reports</button><button data-t="stu">Students</button></nav>
+<main>
+<p class="msg" id="status">Loading face models… (internet needed the first time)</p>
+
+<section id="att" class="on">
+ <div class="card"><div class="cols">
+  <div><label for="aCls">Class</label><select id="aCls"></select></div>
+  <div><label for="aDate">Date</label><input type="date" id="aDate"></div></div>
+  <div class="row"><button class="btn" id="aStart">Start camera</button><button class="btn alt" id="aStop">Stop camera</button><button class="btn alt" id="aSave">Save attendance</button><label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:400"><input type="checkbox" id="aVoice" style="width:auto" checked> Speak thank you</label></div>
+  <p class="msg" id="aMsg"></p>
+  <div class="stage"><video id="aVid" autoplay muted playsinline></video><div class="thanks" id="thanks" role="status" aria-live="polite"></div></div></div>
+ <div class="card"><div class="stats"><div id="cP" style="background:var(--gl);color:var(--g)">Present: 0</div><div id="cA" style="background:var(--rl);color:var(--r)">Absent: 0</div></div>
+  <div class="scroll"><table><thead><tr><th>Student name</th><th>Class</th><th>Status</th></tr></thead><tbody id="aBody"></tbody></table></div>
+  <p class="msg">Tap a status to change it by hand.</p></div>
+</section>
+
+<section id="enr"><div class="card">
+ <label for="eName">Student name</label><input id="eName" placeholder="Full name">
+ <div class="cols"><div><label for="eCls">Class</label><input id="eCls" placeholder="e.g. 5-A"></div>
+ <div><label for="eAdr">Address</label><input id="eAdr" placeholder="Home address"></div></div>
+ <div class="row"><button class="btn" id="eStart">Start camera</button><button class="btn alt" id="eCap">Capture face</button><button class="btn red" id="eReset">Clear captures</button></div>
+ <p class="msg" id="eMsg">Capture the face 3 times (slightly turn the head each time).</p>
+ <video id="eVid" autoplay muted playsinline></video>
+ <div class="row"><button class="btn" id="eSave">Save student</button></div></div></section>
+
+<section id="rep"><div class="card"><div class="cols">
+ <div><label for="rCls">Class</label><select id="rCls"></select></div>
+ <div><label for="rPer">Report type</label><select id="rPer"><option value="d">Daily</option><option value="w">Weekly</option><option value="m">Monthly</option><option value="y">Yearly</option></select></div></div>
+ <label for="rDate">Pick any date in the period</label><input type="date" id="rDate">
+ <div class="row"><button class="btn" id="rGo">Show report</button><button class="btn alt" id="rCsv">Download CSV</button></div>
+ <p class="msg" id="rMsg"></p>
+ <div class="scroll"><table><thead id="rHead"></thead><tbody id="rBody"></tbody></table></div></div></section>
+
+<section id="stu"><div class="card">
+ <div class="scroll"><table><thead><tr><th>Name</th><th>Class</th><th>Address</th><th>Face on this device</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>
+ <div class="row"><button class="btn alt" id="bExp">Backup data</button><button class="btn alt" id="bImp">Restore backup</button><input type="file" id="bFile" accept=".json" hidden></div>
+ <p class="msg">Names, classes and attendance sync online when you are signed in. Face data stays on the phone where the student was enrolled.</p></div></section>
+</main></div>
+<script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+// ---- cloud setup: paste your Firebase config here (leave empty to use this device only)
+const CFG={apiKey:"",authDomain:"",projectId:"",appId:""};
+const cloud=!!CFG.apiKey&&typeof firebase!=='undefined';
+let auth,fs,uid=null,unsubs=[];
+if(cloud){firebase.initializeApp(CFG);auth=firebase.auth();fs=firebase.firestore()}
+const ld=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))||d}catch(e){return d}};
+let db=ld('fa2',null)||{students:[],att:{}},faces=ld('fa2f',{});
+const prev=ld('fa',null);
+if(!localStorage.getItem('fa2')&&prev){db={students:prev.students.map(s=>({id:s.id,name:s.name,cls:s.cls,adr:s.adr})),att:prev.att};prev.students.forEach(s=>faces[s.id]=s.desc)}
+const local0=JSON.parse(JSON.stringify(db));
+const persist=()=>{try{localStorage.setItem('fa2',JSON.stringify(db));localStorage.setItem('fa2f',JSON.stringify(faces))}catch(e){alert('Could not save data in this browser.')}};
+persist();
+const setSync=t=>$('#sync').textContent=t;
+const cerr=e=>setSync('Cloud error: '+e.message);
+const col=n=>fs.collection('users').doc(uid).collection(n);
+const cStu=s=>{if(cloud&&uid)col('students').doc(s.id).set({name:s.name,cls:s.cls,adr:s.adr||''}).catch(cerr)};
+const cAtt=(d,o)=>{if(cloud&&uid)col('attendance').doc(d).set(o,{merge:true}).catch(cerr)};
+const cDel=id=>{if(cloud&&uid)col('students').doc(id).delete().catch(cerr)};
+const iso=d=>new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let ready=false,streams={},timer=null,matcher=null,pending=[];
+const OPT=()=>new faceapi.TinyFaceDetectorOptions({inputSize:320,scoreThreshold:.5});
+
+// tabs
+$('#nav').onclick=e=>{const t=e.target.dataset.t;if(!t)return;
+ $$('nav button').forEach(b=>b.classList.toggle('on',b===e.target));
+ $$('section').forEach(s=>s.classList.toggle('on',s.id===t));
+ if(t!=='att')stop('aVid');if(t!=='enr')stop('eVid');
+ if(t==='stu')renderStu();};
+
+// models
+(async()=>{try{
+ const U='https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/model/';
+ await Promise.all([faceapi.nets.tinyFaceDetector.loadFromUri(U),faceapi.nets.faceLandmark68TinyNet.loadFromUri(U),faceapi.nets.faceRecognitionNet.loadFromUri(U)]);
+ ready=true;$('#status').textContent='Ready.';
+}catch(e){$('#status').textContent='Face models could not load. Check your internet connection and reload.'}})();
+
+async function cam(id){
+ try{stop(id);const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
+  streams[id]=s;$('#'+id).srcObject=s;return true}
+ catch(e){alert('Camera not available. Allow camera permission and open this file in Chrome or Safari.');return false}}
+function stop(id){if(streams[id]){streams[id].getTracks().forEach(t=>t.stop());delete streams[id]}
+ if(id==='aVid'&&timer){clearInterval(timer);timer=null}}
+
+// classes
+const classes=()=>[...new Set(db.students.map(s=>s.cls))].sort();
+function fillClasses(){['#aCls','#rCls'].forEach(id=>{const el=$(id),v=el.value;
+ el.innerHTML='<option value="">All classes</option>'+classes().map(c=>`<option>${esc(c)}</option>`).join('');el.value=v})}
+
+// enroll
+$('#eStart').onclick=()=>cam('eVid');
+$('#eReset').onclick=()=>{pending=[];$('#eMsg').textContent='Captures cleared.'};
+$('#eCap').onclick=async()=>{
+ if(!ready)return alert('Face models are still loading.');
+ if(!streams.eVid)return alert('Start the camera first.');
+ const d=await faceapi.detectSingleFace($('#eVid'),OPT()).withFaceLandmarks(true).withFaceDescriptor();
+ if(!d)return $('#eMsg').textContent='No face found. Face the camera in good light.';
+ pending.push(Array.from(d.descriptor));$('#eMsg').textContent=`Captured ${pending.length} of 3.`+(pending.length>=3?' You can save now.':'');};
+$('#eSave').onclick=()=>{
+ const name=$('#eName').value.trim(),cls=$('#eCls').value.trim(),adr=$('#eAdr').value.trim();
+ if(!name||!cls)return alert('Enter the student name and class.');
+ if(pending.length<3)return alert('Capture the face 3 times first.');
+ const st={id:'s'+Date.now(),name,cls,adr};db.students.push(st);faces[st.id]=pending;persist();cStu(st);
+ pending=[];['#eName','#eCls','#eAdr'].forEach(i=>$(i).value='');
+ $('#eMsg').textContent=`Saved ${name}. Enroll the next student.`;fillClasses();};
+
+// attendance
+const day=()=>$('#aDate').value;
+const rec=()=>db.att[day()]=db.att[day()]||{};
+const list=()=>db.students.filter(s=>!$('#aCls').value||s.cls===$('#aCls').value);
+function buildMatcher(){const L=list().filter(s=>faces[s.id]).map(s=>new faceapi.LabeledFaceDescriptors(s.id,faces[s.id].map(a=>new
