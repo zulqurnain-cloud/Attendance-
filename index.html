@@ -242,5 +242,18 @@ function listen(){let first=true;
   if(first){first=false;offerUpload()}
   fillClasses();renderAtt();renderStu();if(timer)buildMatcher();setSync('Synced')},cerr));
  unsubs.push(col('attendance').onSnapshot(q=>{db.att={};q.docs.forEach(d=>db.att[d.id]=d.data());persist();renderAtt();setSync('Synced')},cerr))}
-const gate=on=>{$('#login
-
+const gate=on=>{$('#login').hidden=on;$('#app').hidden=!on;$('#out').hidden=!on||!cloud};
+if(cloud){gate(false);setSync('Connecting…');loadFB().then(()=>{
+ auth.onAuthStateChanged(u=>{
+  if(u){uid=u.uid;if(localStorage.getItem('fa2uid')!==uid){db={students:[],att:{}};localStorage.setItem('fa2uid',uid);persist()}
+   $('#who').textContent=u.email;gate(true);setSync('Syncing…');renderAtt();renderStu();listen()}
+  else{uid=null;unsubs.forEach(f=>f());unsubs=[];$('#who').textContent='';gate(false)}});
+ const go=m=>{const e=$('#liE').value.trim(),p=$('#liP').value;if(!e||!p)return $('#liMsg').textContent='Enter your email and password.';
+  auth[m](e,p).catch(x=>$('#liMsg').textContent=x.message)};
+ $('#liBtn').onclick=()=>go('signInWithEmailAndPassword');$('#liNew').onclick=()=>go('createUserWithEmailAndPassword');
+ $('#out').onclick=()=>{stop('aVid');stop('eVid');auth.signOut()}
+}).catch(e=>setSync('Could not reach Firebase: '+e.message))}
+else{gate(true);setSync('Saving on this device only')}
+$('#aDate').value=$('#rDate').value=iso(new Date());
+fillClasses();renderAtt();
+</script></body></html>
