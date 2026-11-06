@@ -44,7 +44,7 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
  <div class="row"><button class="btn" id="liBtn">Sign in</button><button class="btn alt" id="liNew">Create account</button></div>
  <p class="msg" id="liMsg">First time? Tap Create account once, then use Sign in every other time.</p></div></div>
 <div id="app">
-<nav id="nav"><button data-t="att" class="on">Attendance</button><button data-t="enr">Enroll student</button><button data-t="rep">Reports</button><button data-t="stu">Students</button></nav>
+<nav id="nav"><button data-t="att" class="on">Attendance</button><button data-t="enr">Enroll</button><button data-t="rep">Reports</button><button data-t="stu">People</button></nav>
 <main>
 <p class="msg" id="status">Starting…</p>
 
@@ -56,18 +56,19 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
   <p class="msg" id="aMsg"></p>
   <div class="stage"><video id="aVid" autoplay muted playsinline></video><div class="thanks" id="thanks" role="status" aria-live="polite"></div></div></div>
  <div class="card"><div class="stats"><div id="cP" style="background:var(--gl);color:var(--g)">Present: 0</div><div id="cA" style="background:var(--rl);color:var(--r)">Absent: 0</div></div>
-  <div class="scroll"><table><thead><tr><th>Student name</th><th>Class</th><th>Status</th></tr></thead><tbody id="aBody"></tbody></table></div>
-  <p class="msg">Tap a status to change it by hand.</p></div>
+  <div class="scroll"><table><thead><tr><th>Name</th><th>Reg. No</th><th>Class</th><th>Status</th></tr></thead><tbody id="aBody"></tbody></table></div>
+  <p class="msg">Tap a status to change it by hand. Choose the class "Teachers" to take teacher attendance.</p></div>
 </section>
 
 <section id="enr"><div class="card">
- <label for="eName">Student name</label><input id="eName" placeholder="Full name">
- <div class="cols"><div><label for="eCls">Class</label><input id="eCls" placeholder="e.g. 5-A"></div>
- <div><label for="eAdr">Address</label><input id="eAdr" placeholder="Home address"></div></div>
+ <label for="eRole">Enroll as</label><select id="eRole"><option>Student</option><option>Teacher</option></select>
+ <label for="eName">Full name</label><input id="eName" placeholder="Full name">
+ <div class="cols"><div id="eClsBox"><label for="eCls">Class</label><input id="eCls" placeholder="e.g. 5-A"></div>
+ <div><label for="eAdr">Registration No</label><input id="eAdr" placeholder="Registration number"></div></div>
  <div class="row"><button class="btn" id="eStart">Start camera</button><button class="btn alt" id="eCap">Capture face</button><button class="btn red" id="eReset">Clear captures</button></div>
  <p class="msg" id="eMsg">Capture the face 3 times (slightly turn the head each time).</p>
  <video id="eVid" autoplay muted playsinline></video>
- <div class="row"><button class="btn" id="eSave">Save student</button></div></div></section>
+ <div class="row"><button class="btn" id="eSave">Save</button></div></div></section>
 
 <section id="rep"><div class="card"><div class="cols">
  <div><label for="rCls">Class</label><select id="rCls"></select></div>
@@ -78,9 +79,9 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
  <div class="scroll"><table><thead id="rHead"></thead><tbody id="rBody"></tbody></table></div></div></section>
 
 <section id="stu"><div class="card">
- <div class="scroll"><table><thead><tr><th>Name</th><th>Class</th><th>Address</th><th>Face on this device</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>
+ <div class="scroll"><table><thead><tr><th>Name</th><th>Role</th><th>Class</th><th>Reg. No</th><th>Face on this device</th><th></th></tr></thead><tbody id="sBody"></tbody></table></div>
  <div class="row"><button class="btn alt" id="bExp">Backup data</button><button class="btn alt" id="bImp">Restore backup</button><input type="file" id="bFile" accept=".json" hidden></div>
- <p class="msg">Names, classes and attendance sync online when you are signed in. Face data stays on the phone where the student was enrolled.</p></div></section>
+ <p class="msg">Names, classes and attendance sync online when you are signed in. Face data stays on the phone where the person was enrolled.</p></div></section>
 </main></div>
 <script>
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -102,7 +103,7 @@ persist();
 const setSync=t=>$('#sync').textContent=t;
 const cerr=e=>setSync('Cloud error: '+e.message);
 const col=n=>fs.collection('users').doc(uid).collection(n);
-const cStu=s=>{if(cloud&&uid)col('students').doc(s.id).set({name:s.name,cls:s.cls,adr:s.adr||''}).catch(cerr)};
+const cStu=s=>{if(cloud&&uid)col('students').doc(s.id).set({name:s.name,cls:s.cls,adr:s.adr||'',role:s.role||'Student'}).catch(cerr)};
 const cAtt=(d,o)=>{if(cloud&&uid)col('attendance').doc(d).set(o,{merge:true}).catch(cerr)};
 const cDel=id=>{if(cloud&&uid)col('students').doc(id).delete().catch(cerr)};
 const iso=d=>new Date(d-d.getTimezoneOffset()*6e4).toISOString().slice(0,10);
@@ -141,6 +142,7 @@ function fillClasses(){['#aCls','#rCls'].forEach(id=>{const el=$(id),v=el.value;
  el.innerHTML='<option value="">All classes</option>'+classes().map(c=>`<option>${esc(c)}</option>`).join('');el.value=v})}
 
 // enroll
+$('#eRole').onchange=()=>{$('#eClsBox').hidden=$('#eRole').value==='Teacher'};
 $('#eStart').onclick=()=>cam('eVid');
 $('#eReset').onclick=()=>{pending=[];$('#eMsg').textContent='Captures cleared.'};
 $('#eCap').onclick=async()=>{
@@ -150,12 +152,12 @@ $('#eCap').onclick=async()=>{
  if(!d)return $('#eMsg').textContent='No face found. Face the camera in good light.';
  pending.push(Array.from(d.descriptor));$('#eMsg').textContent=`Captured ${pending.length} of 3.`+(pending.length>=3?' You can save now.':'');};
 $('#eSave').onclick=()=>{
- const name=$('#eName').value.trim(),cls=$('#eCls').value.trim(),adr=$('#eAdr').value.trim();
- if(!name||!cls)return alert('Enter the student name and class.');
+ const role=$('#eRole').value,name=$('#eName').value.trim(),cls=role==='Teacher'?'Teachers':$('#eCls').value.trim(),adr=$('#eAdr').value.trim();
+ if(!name||!cls)return alert(role==='Teacher'?'Enter the teacher name.':'Enter the name and class.');
  if(pending.length<3)return alert('Capture the face 3 times first.');
- const st={id:'s'+Date.now(),name,cls,adr};db.students.push(st);faces[st.id]=pending;persist();cStu(st);
+ const st={id:'s'+Date.now(),name,cls,adr,role};db.students.push(st);faces[st.id]=pending;persist();cStu(st);
  pending=[];['#eName','#eCls','#eAdr'].forEach(i=>$(i).value='');
- $('#eMsg').textContent=`Saved ${name}. Enroll the next student.`;fillClasses();};
+ $('#eMsg').textContent=`Saved ${name}. Enroll the next person.`;fillClasses();};
 
 // attendance
 const day=()=>$('#aDate').value;
@@ -165,8 +167,8 @@ function buildMatcher(){const L=list().filter(s=>faces[s.id]).map(s=>new faceapi
  matcher=L.length?new faceapi.FaceMatcher(L,.5):null}
 function renderAtt(){const r=db.att[day()]||{};const L=list();let p=0;
  $('#aBody').innerHTML=L.map(s=>{const on=r[s.id]==='Present';if(on)p++;
-  return `<tr><td>${esc(s.name)}</td><td>${esc(s.cls)}</td><td><button class="${on?'P':'A'}" data-id="${s.id}">${on?'Present':'Absent'}</button></td></tr>`}).join('')
-  ||'<tr><td colspan="3">No students yet. Enroll students first.</td></tr>';
+  return `<tr><td>${esc(s.name)}</td><td>${esc(s.adr||'')}</td><td>${esc(s.cls)}</td><td><button class="${on?'P':'A'}" data-id="${s.id}">${on?'Present':'Absent'}</button></td></tr>`}).join('')
+  ||'<tr><td colspan="4">No one enrolled yet.</td></tr>';
  $('#cP').textContent='Present: '+p;$('#cA').textContent='Absent: '+(L.length-p)}
 $('#aBody').onclick=e=>{const id=e.target.dataset.id;if(!id)return;const r=rec();r[id]=r[id]==='Present'?'Absent':'Present';persist();cAtt(day(),{[id]:r[id]});renderAtt()};
 $('#aCls').onchange=()=>{buildMatcher();renderAtt()};$('#aDate').onchange=renderAtt;
@@ -174,7 +176,7 @@ $('#aSave').onclick=()=>{const r=rec();const o={};list().forEach(s=>{if(!r[s.id]
 $('#aStop').onclick=()=>{stop('aVid');$('#aMsg').textContent='Camera stopped.'};
 $('#aStart').onclick=async()=>{
  if(!ready)return alert('Face models are still loading.');
- if(!list().some(s=>faces[s.id]))return alert('No enrolled faces on this device for this class. Enroll students here, or mark attendance by hand.');
+ if(!list().some(s=>faces[s.id]))return alert('No enrolled faces on this device for this class. Enroll here, or mark attendance by hand.');
  if(!await cam('aVid'))return;buildMatcher();$('#aMsg').textContent='Looking for faces…';
  let busy=false;timer=setInterval(async()=>{if(busy||!matcher)return;busy=true;
   try{const f=await faceapi.detectAllFaces($('#aVid'),OPT()).withFaceLandmarks(true).withFaceDescriptors();
@@ -188,16 +190,17 @@ $('#aStart').onclick=async()=>{
   }catch(e){}busy=false},800)};
 
 // thank-you greeting
+const where=s=>s.role==='Teacher'?'Teacher':'Class '+esc(s.cls);
 let seen={},hideT=null;
 function greet(s,fresh){const now=Date.now();if(seen[s.id]&&now-seen[s.id]<5000)return;seen[s.id]=now;
  const t=$('#thanks');t.className='thanks show'+(fresh?'':' dup');
- t.innerHTML=fresh?`<b>Thank you, ${esc(s.name)}!</b><span>Class ${esc(s.cls)} · Attendance marked Present</span>`
-  :`<b>${esc(s.name)}</b><span>Class ${esc(s.cls)} · Already marked Present today</span>`;
+ t.innerHTML=fresh?`<b>Thank you, ${esc(s.name)}!</b><span>${where(s)} · Attendance marked Present</span>`
+  :`<b>${esc(s.name)}</b><span>${where(s)} · Already marked Present today</span>`;
  clearTimeout(hideT);hideT=setTimeout(()=>t.className='thanks',3500);
  if(fresh&&$('#aVoice').checked&&window.speechSynthesis){try{speechSynthesis.cancel();speechSynthesis.speak(new SpeechSynthesisUtterance('Thank you '+s.name))}catch(e){}}}
 
-// students
-function renderStu(){$('#sBody').innerHTML=db.students.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.cls)}</td><td>${esc(s.adr||'')}</td><td>${faces[s.id]?'Yes':'No'}</td><td><button class="btn red" data-del="${s.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="5">No students enrolled yet.</td></tr>'}
+// people list
+function renderStu(){$('#sBody').innerHTML=db.students.map(s=>`<tr><td>${esc(s.name)}</td><td>${esc(s.role||'Student')}</td><td>${esc(s.cls)}</td><td>${esc(s.adr||'')}</td><td>${faces[s.id]?'Yes':'No'}</td><td><button class="btn red" data-del="${s.id}">Delete</button></td></tr>`).join('')||'<tr><td colspan="6">No one enrolled yet.</td></tr>'}
 $('#sBody').onclick=e=>{const id=e.target.dataset.del;if(!id)return;const s=db.students.find(x=>x.id===id);
  if(!confirm('Delete '+s.name+' and their face data?'))return;
  db.students=db.students.filter(x=>x.id!==id);delete faces[id];Object.values(db.att).forEach(r=>delete r[id]);persist();cDel(id);renderStu();fillClasses();renderAtt()};
@@ -218,39 +221,26 @@ function range(p,d){const D=new Date(d+'T00:00:00');let a=new Date(D),b=new Date
 $('#rGo').onclick=()=>{const p=$('#rPer').value,d=$('#rDate').value;if(!d)return alert('Pick a date.');
  const[a,b]=range(p,d),c=$('#rCls').value,L=db.students.filter(s=>!c||s.cls===c);
  const days=Object.keys(db.att).filter(k=>k>=a&&k<=b).sort();
- if(p==='d'){rHeader=['Student name','Class','Status'];
-  rows=L.map(s=>[s.name,s.cls,(db.att[d]&&db.att[d][s.id])==='Present'?'Present':'Absent'])}
- else{rHeader=['Student name','Class','Days present','Days absent','Total days','Attendance %'];
+ if(p==='d'){rHeader=['Name','Reg. No','Class','Status'];
+  rows=L.map(s=>[s.name,s.adr||'',s.cls,(db.att[d]&&db.att[d][s.id])==='Present'?'Present':'Absent'])}
+ else{rHeader=['Name','Reg. No','Class','Days present','Days absent','Total days','Attendance %'];
   rows=L.map(s=>{const pr=days.filter(k=>db.att[k][s.id]==='Present').length;
-   return[s.name,s.cls,pr,days.length-pr,days.length,days.length?Math.round(pr*100/days.length)+'%':'-']})}
+   return[s.name,s.adr||'',s.cls,pr,days.length-pr,days.length,days.length?Math.round(pr*100/days.length)+'%':'-']})}
  $('#rMsg').textContent=(p==='d'?d:a+' to '+b)+(p==='d'?'':' ('+days.length+' days with attendance taken)');
  $('#rHead').innerHTML='<tr>'+rHeader.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
- $('#rBody').innerHTML=rows.map(r=>'<tr>'+r.map(x=>`<td>${esc(x)}</td>`).join('')+'</tr>').join('')||'<tr><td>No students.</td></tr>'};
+ $('#rBody').innerHTML=rows.map(r=>'<tr>'+r.map(x=>`<td>${esc(x)}</td>`).join('')+'</tr>').join('')||'<tr><td>No one enrolled.</td></tr>'};
 $('#rCsv').onclick=()=>{if(!rows.length)return alert('Show a report first.');
  dl('attendance-report.csv',[rHeader,...rows].map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
 
 // ---- cloud sync and sign-in
 function offerUpload(){const m=local0.students.filter(s=>!db.students.find(x=>x.id===s.id));
  if(!m.length)return;
- if(!confirm('Upload '+m.length+' student(s) saved on this device to the account you just signed in with?'))return;
+ if(!confirm('Upload '+m.length+' record(s) saved on this device to the account you just signed in with?'))return;
  m.forEach(cStu);Object.entries(local0.att).forEach(([k,o])=>cAtt(k,o))}
 function listen(){let first=true;
  unsubs.push(col('students').onSnapshot(q=>{db.students=q.docs.map(d=>({id:d.id,...d.data()}));persist();
   if(first){first=false;offerUpload()}
   fillClasses();renderAtt();renderStu();if(timer)buildMatcher();setSync('Synced')},cerr));
  unsubs.push(col('attendance').onSnapshot(q=>{db.att={};q.docs.forEach(d=>db.att[d.id]=d.data());persist();renderAtt();setSync('Synced')},cerr))}
-const gate=on=>{$('#login').hidden=on;$('#app').hidden=!on;$('#out').hidden=!on||!cloud};
-if(cloud){gate(false);setSync('Connecting…');loadFB().then(()=>{
- auth.onAuthStateChanged(u=>{
-  if(u){uid=u.uid;if(localStorage.getItem('fa2uid')!==uid){db={students:[],att:{}};localStorage.setItem('fa2uid',uid);persist()}
-   $('#who').textContent=u.email;gate(true);setSync('Syncing…');renderAtt();renderStu();listen()}
-  else{uid=null;unsubs.forEach(f=>f());unsubs=[];$('#who').textContent='';gate(false)}});
- const go=m=>{const e=$('#liE').value.trim(),p=$('#liP').value;if(!e||!p)return $('#liMsg').textContent='Enter your email and password.';
-  auth[m](e,p).catch(x=>$('#liMsg').textContent=x.message)};
- $('#liBtn').onclick=()=>go('signInWithEmailAndPassword');$('#liNew').onclick=()=>go('createUserWithEmailAndPassword');
- $('#out').onclick=()=>{stop('aVid');stop('eVid');auth.signOut()}
-}).catch(e=>setSync('Could not reach Firebase: '+e.message))}
-else{gate(true);setSync('Saving on this device only')}
-$('#aDate').value=$('#rDate').value=iso(new Date());
-fillClasses();renderAtt();
-</script></body></html>
+const gate=on=>{$('#login
+
