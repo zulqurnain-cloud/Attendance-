@@ -21,7 +21,7 @@ input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:
 .btn.alt{background:var(--gl);color:var(--g)}.btn.red{background:var(--rl);color:var(--r)}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}.row>*{flex:0 0 auto}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.cols{grid-template-columns:1fr}}
-video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:scaleX(-1)}
+video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:scaleX(-1)}video.back{transform:none}
 .stage{position:relative}
 .thanks{position:absolute;left:10px;right:10px;bottom:10px;padding:14px;border-radius:12px;text-align:center;background:var(--g);color:#fff;box-shadow:0 4px 18px #0006;display:none}
 @media(prefers-color-scheme:dark){.thanks{color:#0d1511}}
@@ -39,10 +39,11 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
 </style></head><body>
 <header><div class="top"><h1>Face Attendance</h1><div><small id="sync"></small> <small id="who"></small> <button id="out" hidden>Sign out</button></div></div></header>
 <div id="login" hidden><div class="card"><h2 style="margin-top:0">Sign in</h2>
- <label for="liE">Email</label><input id="liE" type="email" autocomplete="email">
- <label for="liP">Password (6+ characters)</label><input id="liP" type="password" autocomplete="current-password">
+ <label for="liE">Username or email</label><input id="liE" type="text" autocomplete="username" autocapitalize="off" autocorrect="off">
+ <label for="liP">Password</label><input id="liP" type="password" autocomplete="current-password">
  <div class="row"><button class="btn" id="liBtn">Sign in</button><button class="btn alt" id="liNew">Create account</button></div>
- <p class="msg" id="liMsg">First time? Tap Create account once, then use Sign in every other time.</p></div></div>
+ <p class="msg" id="liMsg"></p>
+ <p class="msg"><a href="#" id="liForgot" hidden>Forgot password?</a></p></div></div>
 <div id="app">
 <nav id="nav"><button data-t="att" class="on">Attendance</button><button data-t="enr">Enroll</button><button data-t="rep">Reports</button><button data-t="stu">People</button></nav>
 <main>
@@ -52,12 +53,12 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
  <div class="card"><div class="cols">
   <div><label for="aCls">Class</label><select id="aCls"></select></div>
   <div><label for="aDate">Date</label><input type="date" id="aDate"></div></div>
-  <div class="row"><button class="btn" id="aStart">Start camera</button><button class="btn alt" id="aStop">Stop camera</button><button class="btn alt" id="aSave">Save attendance</button><label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:400"><input type="checkbox" id="aVoice" style="width:auto" checked> Speak thank you</label></div>
+  <div class="row"><button class="btn" id="aStart">Start camera</button><button class="btn alt" id="aStop">Stop camera</button><button class="btn alt" id="aFlip">Switch camera</button><button class="btn alt" id="aSave">Save attendance</button><label style="display:flex;gap:6px;align-items:center;margin:0;font-weight:400"><input type="checkbox" id="aVoice" style="width:auto" checked> Speak thank you</label></div>
   <p class="msg" id="aMsg"></p>
   <div class="stage"><video id="aVid" autoplay muted playsinline></video><div class="thanks" id="thanks" role="status" aria-live="polite"></div></div></div>
  <div class="card"><div class="stats"><div id="cP" style="background:var(--gl);color:var(--g)">Present: 0</div><div id="cA" style="background:var(--rl);color:var(--r)">Absent: 0</div></div>
   <div class="scroll"><table><thead><tr><th>Name</th><th>Reg. No</th><th>Class</th><th>Status</th></tr></thead><tbody id="aBody"></tbody></table></div>
-  <p class="msg">Tap a status to change it by hand. Choose the class "Teachers" to take teacher attendance.</p></div>
+  <p class="msg">Tap a status to change it by hand.</p></div>
 </section>
 
 <section id="enr"><div class="card">
@@ -65,7 +66,7 @@ video{width:100%;max-height:340px;background:#000;border-radius:10px;transform:s
  <label for="eName">Full name</label><input id="eName" placeholder="Full name">
  <div class="cols"><div id="eClsBox"><label for="eCls">Class</label><input id="eCls" placeholder="e.g. 5-A"></div>
  <div><label for="eAdr">Registration No</label><input id="eAdr" placeholder="Registration number"></div></div>
- <div class="row"><button class="btn" id="eStart">Start camera</button><button class="btn alt" id="eCap">Capture face</button><button class="btn red" id="eReset">Clear captures</button></div>
+ <div class="row"><button class="btn" id="eStart">Start camera</button><button class="btn alt" id="eFlip">Switch camera</button><button class="btn alt" id="eCap">Capture face</button><button class="btn red" id="eReset">Clear captures</button></div>
  <p class="msg" id="eMsg">Capture the face 3 times (slightly turn the head each time).</p>
  <video id="eVid" autoplay muted playsinline></video>
  <div class="row"><button class="btn" id="eSave">Save</button></div></div></section>
@@ -129,10 +130,15 @@ $('#nav').onclick=e=>{const t=e.target.dataset.t;if(!t)return;
   ready=true;$('#status').textContent='Ready.';return}catch(e){}}
  $('#status').textContent='Face models could not load. Check your internet and reload the page. You can still mark attendance by hand.'})();
 
+let facing=Object.assign({aVid:'user',eVid:'user'},ld('fa2cam',{}));
+const flipLabel=()=>{$('#aFlip').textContent='Camera: '+(facing.aVid==='user'?'Front':'Back')+' (switch)';$('#eFlip').textContent='Camera: '+(facing.eVid==='user'?'Front':'Back')+' (switch)'};
 async function cam(id){
- try{stop(id);const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user'}});
-  streams[id]=s;$('#'+id).srcObject=s;return true}
- catch(e){alert('Camera not available. Allow camera permission and open this file in Chrome or Safari.');return false}}
+ try{stop(id);const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing[id]}},audio:false});
+  streams[id]=s;const v=$('#'+id);v.srcObject=s;v.classList.toggle('back',facing[id]==='environment');return true}
+ catch(e){alert('Camera not available. Allow camera permission and open the app from its https link in Chrome or Safari (not from WhatsApp).');return false}}
+function flip(id){facing[id]=facing[id]==='user'?'environment':'user';localStorage.setItem('fa2cam',JSON.stringify(facing));flipLabel();
+ if(streams[id])(id==='aVid'?$('#aStart').click():cam('eVid'))}
+$('#aFlip').onclick=()=>flip('aVid');$('#eFlip').onclick=()=>flip('eVid');flipLabel();
 function stop(id){if(streams[id]){streams[id].getTracks().forEach(t=>t.stop());delete streams[id]}
  if(id==='aVid'&&timer){clearInterval(timer);timer=null}}
 
@@ -176,7 +182,7 @@ $('#aSave').onclick=()=>{const r=rec();const o={};list().forEach(s=>{if(!r[s.id]
 $('#aStop').onclick=()=>{stop('aVid');$('#aMsg').textContent='Camera stopped.'};
 $('#aStart').onclick=async()=>{
  if(!ready)return alert('Face models are still loading.');
- if(!list().some(s=>faces[s.id]))return alert('No enrolled faces on this device for this class. Enroll here, or mark attendance by hand.');
+ if(!list().some(s=>faces[s.id]))return alert('No enrolled faces on this device for this class. Enroll students here, or mark attendance by hand.');
  if(!await cam('aVid'))return;buildMatcher();$('#aMsg').textContent='Looking for faces…';
  let busy=false;timer=setInterval(async()=>{if(busy||!matcher)return;busy=true;
   try{const f=await faceapi.detectAllFaces($('#aVid'),OPT()).withFaceLandmarks(true).withFaceDescriptors();
@@ -228,21 +234,21 @@ $('#rGo').onclick=()=>{const p=$('#rPer').value,d=$('#rDate').value;if(!d)return
    return[s.name,s.adr||'',s.cls,pr,days.length-pr,days.length,days.length?Math.round(pr*100/days.length)+'%':'-']})}
  $('#rMsg').textContent=(p==='d'?d:a+' to '+b)+(p==='d'?'':' ('+days.length+' days with attendance taken)');
  $('#rHead').innerHTML='<tr>'+rHeader.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
- $('#rBody').innerHTML=rows.map(r=>'<tr>'+r.map(x=>`<td>${esc(x)}</td>`).join('')+'</tr>').join('')||'<tr><td>No one enrolled.</td></tr>'};
+ $('#rBody').innerHTML=rows.map(r=>'<tr>'+r.map(x=>`<td>${esc(x)}</td>`).join('')+'</tr>').join('')||'<tr><td>No students.</td></tr>'};
 $('#rCsv').onclick=()=>{if(!rows.length)return alert('Show a report first.');
  dl('attendance-report.csv',[rHeader,...rows].map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
 
 // ---- cloud sync and sign-in
 function offerUpload(){const m=local0.students.filter(s=>!db.students.find(x=>x.id===s.id));
  if(!m.length)return;
- if(!confirm('Upload '+m.length+' record(s) saved on this device to the account you just signed in with?'))return;
+ if(!confirm('Upload '+m.length+' student(s) saved on this device to the account you just signed in with?'))return;
  m.forEach(cStu);Object.entries(local0.att).forEach(([k,o])=>cAtt(k,o))}
 function listen(){let first=true;
  unsubs.push(col('students').onSnapshot(q=>{db.students=q.docs.map(d=>({id:d.id,...d.data()}));persist();
   if(first){first=false;offerUpload()}
   fillClasses();renderAtt();renderStu();if(timer)buildMatcher();setSync('Synced')},cerr));
  unsubs.push(col('attendance').onSnapshot(q=>{db.att={};q.docs.forEach(d=>db.att[d.id]=d.data());persist();renderAtt();setSync('Synced')},cerr))}
-const gate=on=>{$('#login').hidden=on;$('#app').hidden=!on;$('#out').hidden=!on||!cloud};
+const gate=on=>{$('#login').hidden=on;$('#app').hidden=!on;$('#out').hidden=!on};
 if(cloud){gate(false);setSync('Connecting…');loadFB().then(()=>{
  auth.onAuthStateChanged(u=>{
   if(u){uid=u.uid;if(localStorage.getItem('fa2uid')!==uid){db={students:[],att:{}};localStorage.setItem('fa2uid',uid);persist()}
@@ -253,7 +259,20 @@ if(cloud){gate(false);setSync('Connecting…');loadFB().then(()=>{
  $('#liBtn').onclick=()=>go('signInWithEmailAndPassword');$('#liNew').onclick=()=>go('createUserWithEmailAndPassword');
  $('#out').onclick=()=>{stop('aVid');stop('eVid');auth.signOut()}
 }).catch(e=>setSync('Could not reach Firebase: '+e.message))}
-else{gate(true);setSync('Saving on this device only')}
+else{
+ const sha=async t=>{try{const h=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('fa|'+t));return[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}catch(e){return btoa(unescape(encodeURIComponent('fa|'+t)))}};
+ const show=()=>{const has=!!ld('fa2login',null);$('#liNew').hidden=has;$('#liBtn').hidden=!has;$('#liForgot').hidden=!has;
+  $('#liMsg').textContent=has?'Sign in to open the app.':'First time: choose a username and a password (4+ characters), then tap Create account.';$('#liE').value=$('#liP').value='';$('#who').textContent=''};
+ const enter=()=>{sessionStorage.setItem('fa2in','1');gate(true);setSync('Saving on this device only');$('#who').textContent=(ld('fa2login',{}).u)||''};
+ if(sessionStorage.getItem('fa2in')&&ld('fa2login',null))enter();else{gate(false);show()}
+ $('#liNew').onclick=async()=>{const u=$('#liE').value.trim(),p=$('#liP').value;
+  if(!u||p.length<4)return $('#liMsg').textContent='Enter a username and a password of 4 or more characters.';
+  localStorage.setItem('fa2login',JSON.stringify({u,h:await sha(u.toLowerCase()+'|'+p)}));enter()};
+ $('#liBtn').onclick=async()=>{const c=ld('fa2login',null),u=$('#liE').value.trim(),p=$('#liP').value;
+  if(c&&c.u.toLowerCase()===u.toLowerCase()&&c.h===await sha(u.toLowerCase()+'|'+p))enter();else $('#liMsg').textContent='Wrong username or password.'};
+ $('#liForgot').onclick=e=>{e.preventDefault();
+  if(prompt('This erases ALL data on this device (restore from a backup afterwards). Type RESET to continue.')==='RESET'){['fa2login','fa2','fa2f'].forEach(k=>localStorage.removeItem(k));sessionStorage.clear();location.reload()}};
+ $('#out').onclick=()=>{stop('aVid');stop('eVid');sessionStorage.removeItem('fa2in');gate(false);show()}}
 $('#aDate').value=$('#rDate').value=iso(new Date());
 fillClasses();renderAtt();
 </script></body></html>
